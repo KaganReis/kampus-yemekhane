@@ -7,7 +7,7 @@ import { colors } from '@/theme';
 
 export default function AccountScreen() {
   const router = useRouter();
-  const { user, data, logout, resetDemo } = useUserData();
+  const { user, data, logout } = useUserData();
   const unread = data.notifications.filter((n) => !n.read).length;
   const initials = user.name
     .split(' ')
@@ -32,7 +32,7 @@ export default function AccountScreen() {
         <Text style={text.h2}>{user.name}</Text>
         <Text style={text.muted}>{user.email}</Text>
         <Text style={text.muted}>
-          {user.faculty} · Öğrenci no: {user.studentNo}
+          {[user.faculty, user.studentNo && `Öğrenci no: ${user.studentNo}`].filter(Boolean).join(' · ')}
         </Text>
       </Card>
 
@@ -63,20 +63,6 @@ export default function AccountScreen() {
       >
         <IconCircle name="log-out" tone="danger" size={36} />
         <Text style={[text.body, { color: colors.danger, fontWeight: '600' }]}>Çıkış yap</Text>
-      </Pressable>
-      <Pressable
-        onPress={async () => {
-          if (await confirm('Demo verilerini sıfırla', 'Bakiye, randevu ve bildirimler başlangıç durumuna döner ve oturum kapanır.', 'Sıfırla'))
-            await resetDemo();
-        }}
-        accessibilityRole="button"
-        style={({ pressed }) => [styles.card, styles.row, pressed && { opacity: 0.6 }]}
-      >
-        <IconCircle name="refresh" tone="neutral" size={36} />
-        <View style={{ flex: 1 }}>
-          <Text style={[text.body, { fontWeight: '600' }]}>Demo verilerini sıfırla</Text>
-          <Text style={text.muted}>Demoyu baştan denemek için</Text>
-        </View>
       </Pressable>
     </Screen>
   );

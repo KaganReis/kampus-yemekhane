@@ -1,6 +1,7 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import * as api from '../services/api';
+import { slotStart } from '../config';
 import { FeedbackKind, NotificationPrefs, Reservation, TransferListing, User, UserData } from '../types';
 
 type AppContextValue = {
@@ -9,11 +10,11 @@ type AppContextValue = {
   signedIn: boolean;
   user: User | null;
   data: UserData | null;
+  /** Open, not yet started transfer listings (everyone's, including the student's own). */
   market: TransferListing[];
   login(email: string, password: string): Promise<void>;
+  register(input: api.RegisterInput): Promise<void>;
   logout(): Promise<void>;
-  resetDemo(): Promise<void>;
-  refresh(): Promise<void>;
   topUp(amount: number): Promise<void>;
   reserve(input: api.ReserveInput): Promise<Reservation>;
   cancelReservation(id: string): Promise<void>;
@@ -29,88 +30,93 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
-  const [signedIn, setSignedIn] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
+  const [uid, setUid] = useState<string | null>(null);
   const [data, setData] = useState<UserData | null>(null);
-  const [market, setMarket] = useState<TransferListing[]>([]);
+  const [allListings, setAllListings] = useState<TransferListing[]>([]);
+  const syncing = useRef(false);
 
-  const apply = useCallback(<R,>(snap: api.Snapshot & { result: R }) => {
-    setData(snap.data);
-    setMarket(snap.market);
-    return snap.result;
-  }, []);
+  const sync = () => {
+    if (syncing.current) return;
+    syncing.current = true;
+    api
+      .sync()
+      .catch(() => {})
+      .finally(() => (syncing.current = false));
+  };
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const restored = await api.restoreSession();
-        if (restored) {
-          apply(await api.fetchSnapshot(restored.id));
-          setUser(restored);
-          setSignedIn(true);
+  // Firebase restores the session on start; until it answers, show the splash.
+  useEffect(
+    () =>
+      api.onAuthChange(async (authUser) => {
+        if (authUser) {
+          await api.ensureUserDoc(authUser).catch(() => {});
+          setUid(authUser.uid);
+        } else {
+          setUid(null);
+          setReady(true);
         }
-      } finally {
-        setReady(true);
-      }
-    })();
-  }, [apply]);
+      }),
+    [],
+  );
 
-  // Re-settle time-based state (finished meals, expired listings) when the app returns to the foreground.
+  // Live copies of the student's document and the transfer market.
   useEffect(() => {
-    if (!user || !signedIn) return;
+    if (!uid) return;
+    const unsubUser = api.watchUserData(
+      uid,
+      (d) => {
+        if (d) setData(d);
+        setReady(true);
+      },
+      () => setReady(true),
+    );
+    const unsubMarket = api.watchMarket(setAllListings, () => {});
+    sync();
+    return () => {
+      unsubUser();
+      unsubMarket();
+    };
+  }, [uid]);
+
+  // Another student took one of our listings: settle our side (refund) right away.
+  useEffect(() => {
+    if (uid && allListings.some((l) => l.ownerId === uid && l.status === 'devralindi')) sync();
+  }, [uid, allListings]);
+
+  // Finished meals and expired listings are settled when the app returns to the foreground.
+  useEffect(() => {
+    if (!uid) return;
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') api.fetchSnapshot(user.id).then(apply).catch(() => {});
+      if (s === 'active') sync();
     });
     return () => sub.remove();
-  }, [user, signedIn, apply]);
+  }, [uid]);
 
   const value = useMemo<AppContextValue>(() => {
-    const uid = () => {
-      if (!user) throw new api.ApiError('Oturum açmanız gerekiyor.');
-      return user.id;
-    };
+    const now = new Date();
     return {
       ready,
-      signedIn,
-      user,
+      signedIn: !!uid && data?.profile.id === uid,
+      user: data?.profile ?? null,
       data,
-      market,
-      async login(email, password) {
-        const u = await api.login(email, password);
-        apply(await api.fetchSnapshot(u.id));
-        setUser(u);
-        setSignedIn(true);
-      },
-      async logout() {
-        await api.logout();
-        setSignedIn(false);
-      },
-      async resetDemo() {
-        await api.resetDemo(uid());
-        setSignedIn(false);
-      },
-      refresh: async () => void apply(await api.fetchSnapshot(uid())),
-      topUp: async (amount) => void apply(await api.topUp(uid(), amount)),
-      reserve: async (input) => apply(await api.reserve(uid(), input)),
-      cancelReservation: async (id) => void apply(await api.cancelReservation(uid(), id)),
-      listForTransfer: async (id) => void apply(await api.listForTransfer(uid(), shortName(user?.name ?? ''), id)),
-      withdrawListing: async (id) => void apply(await api.withdrawListing(uid(), id)),
-      takeTransfer: async (id) => apply(await api.takeTransfer(uid(), id)),
-      submitFeedback: async (input) => void apply(await api.submitFeedback(uid(), input)),
-      markNotificationsRead: async () => void apply(await api.markNotificationsRead(uid())),
-      updatePrefs: async (prefs) => void apply(await api.updatePrefs(uid(), prefs)),
+      market: allListings.filter((l) => l.status === 'acik' && slotStart(l.date, l.slotIndex) > now),
+      login: api.login,
+      register: api.register,
+      logout: api.logout,
+      topUp: api.topUp,
+      reserve: api.reserve,
+      cancelReservation: api.cancelReservation,
+      listForTransfer: api.listForTransfer,
+      withdrawListing: api.withdrawListing,
+      takeTransfer: api.takeTransfer,
+      submitFeedback: api.submitFeedback,
+      markNotificationsRead: api.markNotificationsRead,
+      updatePrefs: api.updatePrefs,
     };
-  }, [ready, signedIn, user, data, market, apply]);
+  }, [ready, uid, data, allListings]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
-
-/** "Elif Yılmaz" → "Elif Y." for public transfer listings. */
-const shortName = (name: string) => {
-  const [first, ...rest] = name.split(' ');
-  const last = rest.at(-1);
-  return last ? `${first} ${last[0]}.` : first;
-};
 
 export function useApp(): AppContextValue {
   const ctx = useContext(AppContext);

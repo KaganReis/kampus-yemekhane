@@ -3,35 +3,56 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useApp } from '@/store/AppContext';
-import { Banner, Button, Field, errorMessage, text } from '@/components/ui';
+import { Banner, Button, Field, Segmented, errorMessage, text } from '@/components/ui';
 import { UNIVERSITY_EMAIL } from '@/config';
-import { DEMO_ACCOUNTS } from '@/data/seed';
 import { colors, radius, space } from '@/theme';
 
+type Mode = 'giris' | 'kayit';
+
 export default function LoginScreen() {
-  const { login } = useApp();
+  const { login, register } = useApp();
+  const [mode, setMode] = useState<Mode>('giris');
+  const [name, setName] = useState('');
+  const [studentNo, setStudentNo] = useState('');
+  const [faculty, setFaculty] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [password2, setPassword2] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [touched, setTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isRegister = mode === 'kayit';
   const emailError =
     touched && email && !UNIVERSITY_EMAIL.test(email.trim()) ? 'Üniversite e-posta adresi …edu.tr ile bitmelidir.' : undefined;
+  const passwordError = isRegister && password && password.length < 8 ? 'Şifre en az 8 karakter olmalı.' : undefined;
+  const password2Error = isRegister && password2 && password2 !== password ? 'Şifreler eşleşmiyor.' : undefined;
+  const canSubmit = isRegister
+    ? !!(name.trim() && studentNo.trim() && email && password.length >= 8 && password === password2)
+    : !!(email && password);
 
   async function submit() {
+    if (!canSubmit) return;
     setTouched(true);
     setError(null);
     setLoading(true);
     try {
-      await login(email, password);
+      if (isRegister) await register({ name, studentNo, faculty, email, password });
+      else await login(email, password);
     } catch (e) {
       setError(errorMessage(e));
-      setPassword('');
+      if (!isRegister) setPassword('');
     } finally {
       setLoading(false);
     }
+  }
+
+  function switchMode(m: Mode) {
+    setMode(m);
+    setError(null);
+    setPassword('');
+    setPassword2('');
   }
 
   return (
@@ -47,10 +68,36 @@ export default function LoginScreen() {
           </View>
 
           <View style={s.sheet}>
-            <Text style={text.h2}>Oturum aç</Text>
-            <Text style={text.muted}>Üniversite e-posta adresiniz ve şifrenizle giriş yapın.</Text>
+            <Segmented
+              options={[
+                { key: 'giris', label: 'Giriş yap' },
+                { key: 'kayit', label: 'Kayıt ol' },
+              ]}
+              value={mode}
+              onChange={switchMode}
+            />
+            <Text style={text.muted}>
+              {isRegister
+                ? 'Üniversite e-posta adresinizle bir hesap oluşturun. Bakiyeniz ve randevularınız hesabınıza kaydedilir; hangi cihazdan girerseniz girin aynı görünür.'
+                : 'Üniversite e-posta adresiniz ve şifrenizle giriş yapın.'}
+            </Text>
 
             {error && <Banner tone="danger" text={error} />}
+
+            {isRegister && (
+              <>
+                <Field label="Ad soyad" placeholder="Elif Yılmaz" value={name} onChangeText={setName} autoComplete="name" textContentType="name" />
+                <Field
+                  label="Öğrenci numarası"
+                  placeholder="2023104512"
+                  value={studentNo}
+                  onChangeText={(t) => setStudentNo(t.replace(/\D/g, ''))}
+                  keyboardType="number-pad"
+                  maxLength={12}
+                />
+                <Field label="Fakülte (isteğe bağlı)" placeholder="Mühendislik Fakültesi" value={faculty} onChangeText={setFaculty} />
+              </>
+            )}
 
             <Field
               label="Üniversite e-postası"
@@ -69,14 +116,15 @@ export default function LoginScreen() {
             <View>
               <Field
                 label="Şifre"
-                placeholder="Şifreniz"
+                placeholder={isRegister ? 'En az 8 karakter' : 'Şifreniz'}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
-                autoComplete="current-password"
-                textContentType="password"
-                onSubmitEditing={submit}
-                returnKeyType="go"
+                autoComplete={isRegister ? 'new-password' : 'current-password'}
+                textContentType={isRegister ? 'newPassword' : 'password'}
+                onSubmitEditing={isRegister ? undefined : submit}
+                returnKeyType={isRegister ? 'next' : 'go'}
+                error={passwordError}
               />
               <Pressable
                 onPress={() => setShowPassword((v) => !v)}
@@ -89,32 +137,28 @@ export default function LoginScreen() {
               </Pressable>
             </View>
 
-            <Button title="Giriş yap" onPress={submit} loading={loading} disabled={!email || !password} />
-
-            <View style={s.demo}>
-              <Text style={[text.h3, { fontSize: 14 }]}>Demo sürüm</Text>
-              <Text style={text.muted}>
-                Bu sürüm gerçek bir sunucuya bağlı değildir; veriler yalnızca bu cihazda tutulur. Denemek için demo hesabı
-                kullanın: {DEMO_ACCOUNTS[0].user.email}
-              </Text>
-              <Button
-                title="Demo hesabıyla doldur"
-                variant="secondary"
-                compact
-                icon="flash"
-                onPress={() => {
-                  setEmail(DEMO_ACCOUNTS[0].user.email);
-                  setPassword(DEMO_ACCOUNTS[0].password);
-                  setError(null);
-                }}
+            {isRegister && (
+              <Field
+                label="Şifre (tekrar)"
+                placeholder="Şifrenizi tekrar girin"
+                value={password2}
+                onChangeText={setPassword2}
+                secureTextEntry={!showPassword}
+                autoComplete="new-password"
+                textContentType="newPassword"
+                onSubmitEditing={submit}
+                returnKeyType="go"
+                error={password2Error}
               />
-            </View>
+            )}
+
+            <Button title={isRegister ? 'Hesap oluştur' : 'Giriş yap'} onPress={submit} loading={loading} disabled={!canSubmit} />
 
             <View style={s.secure}>
               <Ionicons name="lock-closed" size={14} color={colors.muted} />
               <Text style={[text.muted, { flex: 1 }]}>
-                Oturum anahtarınız cihazın güvenli deposunda saklanır ve 12 saat sonra sona erer. 5 hatalı denemede
-                giriş 5 dakika kilitlenir.
+                Hesabınız Firebase Authentication ile korunur; şifreniz uygulamada saklanmaz. Art arda hatalı denemelerde giriş
+                geçici olarak engellenir.
               </Text>
             </View>
           </View>
@@ -139,13 +183,4 @@ const s = StyleSheet.create({
   },
   eye: { position: 'absolute', right: 12, top: 38 },
   secure: { flexDirection: 'row', gap: 6, alignItems: 'flex-start' },
-  demo: {
-    gap: space.sm,
-    padding: space.lg,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
-  },
 });

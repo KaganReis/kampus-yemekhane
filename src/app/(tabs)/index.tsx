@@ -89,10 +89,10 @@ export default function HomeScreen() {
       <Card>
         {todayMenu ? (
           [
-            ['Çorba', todayMenu.soup.name],
             ['Ana yemek', todayMenu.main.name],
-            ['Yardımcı', todayMenu.side.name],
-            ['Salata', todayMenu.salad.name],
+            ['Pilav', todayMenu.side.name],
+            ['Çorba', todayMenu.soup.name],
+            ['İçecek', todayMenu.drink.name],
             ['Tatlı', todayMenu.dessert.name],
           ].map(([k, v]) => (
             <View key={k} style={[styles.row, { justifyContent: 'space-between' }]}>

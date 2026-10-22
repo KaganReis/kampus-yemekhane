@@ -5,16 +5,16 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useUserData } from '@/store/AppContext';
 import { Badge, Banner, Button, Card, Chip, ProgressBar, Screen, SectionTitle, errorMessage, styles, text } from '@/components/ui';
 import {
-  CHOICE_LABEL,
+  EXTRA_LABEL,
   MEAL_PRICE,
   SLOT_CAPACITY,
   TIME_PREFERENCES,
   TimePreference,
   slotLabel,
 } from '@/config';
-import { baseKcal, menuFor, slotOccupancy } from '@/data/menu';
+import { menuFor, slotOccupancy, trayKcal, trayNames } from '@/data/menu';
 import { isBookable } from '@/services/api';
-import { ChoiceComponent, PaymentMethod, Reservation } from '@/types';
+import { ExtraChoice, MenuItem, PaymentMethod, Reservation } from '@/types';
 import { addDays, dateKey, longDate, relativeDay, shortDate, shortDayName, tl } from '@/utils/format';
 import { colors, radius, space } from '@/theme';
 
@@ -40,7 +40,9 @@ export default function NewReservationScreen() {
   const initial = params.date && dates.includes(params.date) && !taken.has(params.date) ? params.date : dates.find((d) => !taken.has(d));
 
   const [date, setDate] = useState<string | undefined>(initial);
-  const [choice, setChoice] = useState<ChoiceComponent>('corba');
+  const [soup, setSoup] = useState(true);
+  const [side, setSide] = useState(true);
+  const [extra, setExtra] = useState<ExtraChoice | null>(null);
   const [preference, setPreference] = useState<TimePreference>('orta');
   const activeTickets = data.tickets.filter((t) => t.status === 'aktif' && (!date || t.validUntil >= date));
   const [payment, setPayment] = useState<PaymentMethod>('bakiye');
@@ -64,12 +66,14 @@ export default function NewReservationScreen() {
   const ticketValid = activeTickets.some((t) => t.id === ticketId);
   const canPay =
     payment === 'bakiye' ? data.balance >= MEAL_PRICE : payment === 'ucretsiz' ? data.freeMeals > 0 : ticketValid;
+  const tray = extra ? { soup, side, extra } : null;
 
   async function submit() {
     setError(null);
     setLoading(true);
     try {
-      const r = await reserve({ date: date!, choice, preference, paidWith: payment, ticketId: payment === 'bilet' ? ticketId : undefined });
+      if (!tray) throw new Error('Lütfen içecek veya tatlıdan birini seçin.');
+      const r = await reserve({ date: date!, tray, preference, paidWith: payment, ticketId: payment === 'bilet' ? ticketId : undefined });
       setCreated(r);
     } catch (e) {
       setError(errorMessage(e));
@@ -93,35 +97,51 @@ export default function NewReservationScreen() {
       </ScrollView>
       <Text style={text.muted}>✓ işaretli günlerde randevunuz zaten var. Aynı gün için randevu alımı 10:00’da kapanır.</Text>
 
-      <Card style={{ gap: 6 }}>
-        <Text style={text.h3}>{longDate(date)} · sabit menü</Text>
-        <Text style={text.body}>
-          {menu.main.name} · {menu.side.name} · {menu.dessert.name}
-        </Text>
-        <Text style={text.muted}>{baseKcal(menu)} kcal</Text>
-      </Card>
+      <SectionTitle>2. Tepsinizi oluşturun</SectionTitle>
+      <Text style={[text.muted, { marginTop: -4 }]}>{longDate(date)} menüsü</Text>
 
-      <SectionTitle>2. Bileşen seçin</SectionTitle>
+      <View style={[s.option, s.trayRow]}>
+        <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+        <DishText label="Ana yemek" item={menu.main} />
+        <Badge label="Zorunlu" tone="primary" />
+      </View>
+
+      <Text style={styles.label}>İçecek veya tatlı (birini seçin)</Text>
       <View style={[styles.row, { alignItems: 'stretch' }]}>
-        {(['corba', 'salata'] as const).map((c) => {
-          const item = c === 'corba' ? menu.soup : menu.salad;
-          const selected = c === choice;
+        {(['icecek', 'tatli'] as const).map((c) => {
+          const item = c === 'icecek' ? menu.drink : menu.dessert;
+          const selected = c === extra;
           return (
             <Pressable
               key={c}
-              onPress={() => setChoice(c)}
+              onPress={() => setExtra(c)}
               accessibilityRole="radio"
               accessibilityState={{ checked: selected }}
               style={[s.option, { flex: 1 }, selected && s.optionSelected]}
             >
-              <Ionicons name={c === 'corba' ? 'cafe' : 'leaf'} size={24} color={selected ? colors.primary : colors.muted} />
-              <Text style={text.h3}>{CHOICE_LABEL[c]}</Text>
+              <Ionicons name={c === 'icecek' ? 'wine' : 'ice-cream'} size={24} color={selected ? colors.primary : colors.muted} />
+              <Text style={text.h3}>{EXTRA_LABEL[c]}</Text>
               <Text style={text.body}>{item.name}</Text>
               <Text style={text.muted}>{item.kcal} kcal</Text>
             </Pressable>
           );
         })}
       </View>
+
+      <Text style={styles.label}>İsteğe bağlı</Text>
+      <OptionalDish label="Çorba" item={menu.soup} checked={soup} onToggle={() => setSoup((v) => !v)} />
+      <OptionalDish label="2. yemek (pilav)" item={menu.side} checked={side} onToggle={() => setSide((v) => !v)} />
+
+      <Card style={{ gap: 4 }}>
+        {tray ? (
+          <>
+            <Text style={text.h3}>Tepsiniz · {trayKcal(menu, tray)} kcal</Text>
+            <Text style={text.body}>{trayNames(menu, tray)}</Text>
+          </>
+        ) : (
+          <Text style={[text.body, { color: colors.warning }]}>Devam etmek için içecek veya tatlıdan birini seçin.</Text>
+        )}
+      </Card>
 
       <SectionTitle>3. Saat tercihi</SectionTitle>
       <Text style={[text.muted, { marginTop: -4 }]}>
@@ -186,8 +206,48 @@ export default function NewReservationScreen() {
       {payment === 'bakiye' && data.balance < MEAL_PRICE && (
         <Button title="Yetersiz bakiye — bakiye yükle" variant="secondary" onPress={() => router.push('/topup')} />
       )}
-      <Button title="Randevuyu oluştur" icon="checkmark-circle" loading={loading} disabled={!canPay} onPress={submit} />
+      <Button
+        title={tray ? 'Randevuyu oluştur' : 'İçecek veya tatlı seçin'}
+        icon="checkmark-circle"
+        loading={loading}
+        disabled={!canPay || !tray}
+        onPress={submit}
+      />
     </Screen>
+  );
+}
+
+function DishText({ label, item }: { label: string; item: MenuItem }) {
+  return (
+    <View style={{ flex: 1 }}>
+      <Text style={text.muted}>{label}</Text>
+      <Text style={[text.body, { fontWeight: '600' }]}>{item.name}</Text>
+      <Text style={text.muted}>{item.kcal} kcal</Text>
+    </View>
+  );
+}
+
+function OptionalDish({
+  label,
+  item,
+  checked,
+  onToggle,
+}: {
+  label: string;
+  item: MenuItem;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onToggle}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      style={[s.option, s.trayRow, checked && s.optionSelected]}
+    >
+      <Ionicons name={checked ? 'checkbox' : 'square-outline'} size={24} color={checked ? colors.primary : colors.muted} />
+      <DishText label={label} item={item} />
+    </Pressable>
   );
 }
 
@@ -235,9 +295,7 @@ function Success({ r, onDone }: { r: Reservation; onDone: () => void }) {
       <Card style={{ alignItems: 'center', backgroundColor: colors.primarySoft, borderColor: colors.primarySoft }}>
         <Text style={[text.muted, { color: colors.primaryDark }]}>Atanan saat diliminiz</Text>
         <Text style={{ fontSize: 34, fontWeight: '800', color: colors.primaryDark }}>{slotLabel(r.slotIndex)}</Text>
-        <Text style={[text.body, { color: colors.primaryDark, textAlign: 'center' }]}>
-          {menu.main.name} · {menu.side.name} · {menu.dessert.name} · {r.choice === 'corba' ? menu.soup.name : menu.salad.name}
-        </Text>
+        <Text style={[text.body, { color: colors.primaryDark, textAlign: 'center' }]}>{trayNames(menu, r.tray)}</Text>
       </Card>
       <Banner tone="info" text="Saat diliminizden 30 dakika önce hatırlatma bildirimi gönderilecek. Bu dilim dışında servis alınamaz." />
       <Button title="Randevularıma git" onPress={onDone} />
@@ -256,4 +314,5 @@ const s = StyleSheet.create({
   },
   optionSelected: { borderColor: colors.primary, backgroundColor: '#F0FDFA' },
   payOption: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  trayRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
 });

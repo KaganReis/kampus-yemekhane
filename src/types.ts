@@ -6,12 +6,6 @@ export type User = {
   faculty: string;
 };
 
-export type Session = {
-  token: string;
-  userId: string;
-  expiresAt: number;
-};
-
 export type TxType = 'yukleme' | 'harcama' | 'iade' | 'devir-alim' | 'devir-iade';
 
 export type Transaction = {
@@ -24,8 +18,14 @@ export type Transaction = {
   balanceAfter: number;
 };
 
-/** The selectable component of the tray: soup or salad. */
-export type ChoiceComponent = 'corba' | 'salata';
+/** Drink or dessert: one of the two is a required part of every tray. */
+export type ExtraChoice = 'icecek' | 'tatli';
+
+/**
+ * What the student takes. The main dish is always included; soup and the
+ * second dish (pilav) are optional; exactly one of drink or dessert.
+ */
+export type TraySelection = { soup: boolean; side: boolean; extra: ExtraChoice };
 
 export type MenuItem = { name: string; kcal: number };
 
@@ -34,7 +34,7 @@ export type MenuDay = {
   soup: MenuItem;
   main: MenuItem;
   side: MenuItem;
-  salad: MenuItem;
+  drink: MenuItem;
   dessert: MenuItem;
 };
 
@@ -51,7 +51,7 @@ export type ReservationStatus =
 export type Reservation = {
   id: string;
   date: string;
-  choice: ChoiceComponent;
+  tray: TraySelection;
   slotIndex: number;
   status: ReservationStatus;
   paidWith: PaymentMethod;
@@ -61,16 +61,23 @@ export type Reservation = {
   createdAt: string;
 };
 
+/**
+ * A reservation offered for transfer. The buyer flips it to 'devralindi';
+ * the seller's app then settles its side (refund, notification) and deletes it.
+ */
 export type TransferListing = {
   id: string;
   ownerId: string;
   ownerName: string;
-  reservationId?: string;
+  reservationId: string;
   date: string;
   slotIndex: number;
-  choice: ChoiceComponent;
+  tray: TraySelection;
   price: number;
   createdAt: string;
+  status: 'acik' | 'devralindi';
+  takenBy?: string;
+  takenAt?: string;
 };
 
 export type TicketStatus = 'aktif' | 'kullanildi' | 'suresi-doldu';
@@ -113,6 +120,7 @@ export type NotificationPrefs = Record<NotificationKind, boolean> & {
 };
 
 export type UserData = {
+  profile: User;
   balance: number;
   transactions: Transaction[];
   reservations: Reservation[];

@@ -1,0 +1,41 @@
+rules_version = '2';
+
+// Access rules for the Kampüs Yemekhane Firestore database.
+// Paste into Firebase console → Firestore Database → Rules, then Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // One document per student; only its owner can read or write it.
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Transfer listings: every signed-in student can see them.
+    match /market/{id} {
+      allow read: if request.auth != null;
+
+      // A student lists one of their own reservations; the id is the reservation id.
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.reservationId == id
+        && request.resource.data.status == 'acik';
+
+      // Another student takes an open listing: only the take fields may change.
+      allow update: if request.auth != null
+        && resource.data.status == 'acik'
+        && resource.data.ownerId != request.auth.uid
+        && request.resource.data.status == 'devralindi'
+        && request.resource.data.takenBy == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'takenBy', 'takenAt']);
+
+      // The owner withdraws the listing, or removes it after settling a transfer.
+      allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+    }
+
+    // Complaints and suggestions: students submit, cafeteria staff read them in the console.
+    match /feedback/{id} {
+      allow create: if request.auth != null
+        && (!('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid);
+    }
+  }
+}

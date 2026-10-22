@@ -292,7 +292,7 @@ export function confirm(title: string, message: string, confirmText = 'Onayla'):
   );
 }
 
-export const errorMessage = (e: unknown) => (e instanceof Error ? e.message : 'Beklenmeyen bir hata oluştu.');
+export { errorMessage } from '../services/api';
 
 export const text = StyleSheet.create({
   h1: { fontSize: 26, fontWeight: '700', color: colors.text },

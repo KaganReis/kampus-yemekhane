@@ -18,8 +18,8 @@ import {
   text,
 } from '@/components/ui';
 import { ReservationCard } from '@/components/ReservationCard';
-import { CHOICE_LABEL, slotLabel } from '@/config';
-import { menuFor } from '@/data/menu';
+import { slotLabel, trayLabel } from '@/config';
+import { menuFor, trayNames } from '@/data/menu';
 import { TransferListing } from '@/types';
 import { dateTime, longDate, relativeDay, tl } from '@/utils/format';
 import { colors } from '@/theme';
@@ -164,7 +164,7 @@ function TransferMarket() {
   async function take(l: TransferListing) {
     const ok = await confirm(
       'Randevuyu devral',
-      `${longDate(l.date)} ${slotLabel(l.slotIndex)} (${CHOICE_LABEL[l.choice]}) randevusu için bakiyenizden ${tl(l.price)} düşülecek.`,
+      `${longDate(l.date)} ${slotLabel(l.slotIndex)} randevusu (${trayLabel(l.tray)}) için bakiyenizden ${tl(l.price)} düşülecek.`,
       'Devral',
     );
     if (!ok) return;
@@ -196,7 +196,7 @@ function TransferMarket() {
                 <Badge label="Devralınmayı bekliyor" tone="warning" />
               </View>
               <Text style={text.body}>
-                {slotLabel(l.slotIndex)} · {CHOICE_LABEL[l.choice]}
+                {slotLabel(l.slotIndex)} · {trayLabel(l.tray)}
               </Text>
               <Text style={text.muted}>Geri çekmek için Randevularım sekmesini kullanın.</Text>
             </Card>
@@ -219,10 +219,10 @@ function TransferMarket() {
               </View>
               <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>{slotLabel(l.slotIndex)}</Text>
               <Text style={text.muted}>
-                {menu.main.name} · {l.choice === 'corba' ? menu.soup.name : menu.salad.name}
+                {trayNames(menu, l.tray)}
               </Text>
               <View style={[styles.row, { flexWrap: 'wrap', gap: 6 }]}>
-                <Badge label={CHOICE_LABEL[l.choice]} tone="primary" />
+                <Badge label={trayLabel(l.tray)} tone="primary" />
                 <Badge label={`${l.ownerName} · ${dateTime(l.createdAt)}`} />
               </View>
               <Button

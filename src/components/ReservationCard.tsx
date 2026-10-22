@@ -2,8 +2,8 @@ import { Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { ReactNode } from 'react';
 import { Reservation, ReservationStatus } from '../types';
-import { CHOICE_LABEL, PAYMENT_LABEL, slotLabel } from '../config';
-import { menuFor } from '../data/menu';
+import { PAYMENT_LABEL, slotLabel, trayLabel } from '../config';
+import { menuFor, trayNames } from '../data/menu';
 import { relativeDay } from '../utils/format';
 import { colors } from '../theme';
 import { Badge, Card, styles, text, Tone } from './ui';
@@ -30,14 +30,9 @@ export function ReservationCard({ r, children }: { r: Reservation; children?: Re
         <Ionicons name="time" size={22} color={colors.primary} />
         <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text }}>{slotLabel(r.slotIndex)}</Text>
       </View>
-      <Text style={text.muted}>
-        {menu.main.name} · {menu.side.name} · {menu.dessert.name} ·{' '}
-        <Text style={{ fontWeight: '700', color: colors.text }}>
-          {r.choice === 'corba' ? menu.soup.name : menu.salad.name}
-        </Text>
-      </Text>
+      <Text style={text.muted}>{trayNames(menu, r.tray)}</Text>
       <View style={[styles.row, { flexWrap: 'wrap', gap: 6 }]}>
-        <Badge label={CHOICE_LABEL[r.choice]} tone="primary" />
+        <Badge label={trayLabel(r.tray)} tone="primary" />
         <Badge label={PAYMENT_LABEL[r.paidWith]} />
         {r.source === 'devir' && <Badge label="Devralındı" tone="info" />}
       </View>

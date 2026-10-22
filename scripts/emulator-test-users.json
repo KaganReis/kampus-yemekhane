@@ -1,0 +1,7 @@
+{
+  "_note": "Test accounts for the local Firebase emulators only (npm run emulators + npm run web:emulator). They do not exist in the live project.",
+  "users": [
+    { "name": "Ayşe Test", "studentNo": "2024000001", "email": "ayse.test@ogr.ornek.edu.tr", "password": "TestSifre123" },
+    { "name": "Mehmet Test", "studentNo": "2024000002", "email": "mehmet.test@ogr.ornek.edu.tr", "password": "TestSifre123" }
+  ]
+}

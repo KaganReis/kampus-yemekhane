@@ -34,7 +34,6 @@
         }
       ],
       "expo-status-bar",
-      "expo-secure-store",
       "expo-font"
     ],
     "scheme": "yemekhane",

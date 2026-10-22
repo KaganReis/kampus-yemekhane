@@ -3,7 +3,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useUserData } from '@/store/AppContext';
 import { Badge, Button, Card, Chip, Screen, Segmented, styles, text } from '@/components/ui';
-import { baseKcal, weekMenu } from '@/data/menu';
+import { trayKcal, weekMenu } from '@/data/menu';
 import { isBookable } from '@/services/api';
 import { dateKey, longDate, shortDate, shortDayName } from '@/utils/format';
 import { MenuItem } from '@/types';
@@ -60,19 +60,23 @@ export default function MenuScreen() {
           {menu.date === today && <Badge label="Bugün" tone="primary" />}
         </View>
 
-        <Text style={[text.muted, { marginTop: 4 }]}>SABİT MENÜ</Text>
+        <Text style={[text.muted, { marginTop: 4 }]}>ZORUNLU</Text>
         <Dish label="Ana yemek" item={menu.main} />
-        <Dish label="Yardımcı yemek" item={menu.side} />
-        <Dish label="Tatlı / içecek" item={menu.dessert} />
 
         <View style={styles.divider} />
-        <Text style={text.muted}>SEÇİMLİ (BİRİNİ SEÇİN)</Text>
+        <Text style={text.muted}>ZORUNLU · BİRİNİ SEÇİN</Text>
+        <Dish label="İçecek" item={menu.drink} />
+        <Dish label="Tatlı" item={menu.dessert} />
+
+        <View style={styles.divider} />
+        <Text style={text.muted}>İSTEĞE BAĞLI</Text>
         <Dish label="Çorba" item={menu.soup} />
-        <Dish label="Salata" item={menu.salad} />
+        <Dish label="2. yemek (pilav)" item={menu.side} />
 
         <View style={styles.divider} />
         <Text style={text.muted}>
-          Toplam: {baseKcal(menu) + menu.soup.kcal} kcal (çorbalı) · {baseKcal(menu) + menu.salad.kcal} kcal (salatalı)
+          Tam tepsi: {trayKcal(menu, { soup: true, side: true, extra: 'tatli' })} kcal (tatlıyla) ·{' '}
+          {trayKcal(menu, { soup: true, side: true, extra: 'icecek' })} kcal (içecekle)
         </Text>
       </Card>
 
